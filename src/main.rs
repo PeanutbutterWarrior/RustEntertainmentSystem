@@ -11,6 +11,10 @@ struct CPU {
     status: StatusRegister,
 }
 
+struct Memory {
+    ram: Box<[u8]>,
+}
+
 impl CPU {
     fn new() -> Self {
         CPU {
@@ -25,6 +29,28 @@ impl CPU {
 
     fn execute_next_instruction() {
         todo!()
+    }
+}
+
+impl Memory {
+    fn new() -> Self{
+        Memory {
+            ram: Box::new([0; 0x800]),
+        }
+    }
+
+    fn read(&self, address: u16) -> u8 {
+        if address < 0x2000 {
+            self.ram[(address % 0x800) as usize]
+        } else {
+            0
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        if address < 0x2000 {
+            self.ram[(address % 0x800) as usize] = value
+        }
     }
 }
 
