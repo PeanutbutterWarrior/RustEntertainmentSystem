@@ -5,7 +5,7 @@ use std::fs;
 const KB16: usize = 1024 * 16;
 
 enum AddressingMode {
-    None,
+    Implied,
     Accumulator,
     Immediate(u8),
     Indirect(u16),
@@ -44,23 +44,7 @@ impl CPU {
 
     pub fn execute_next_instruction(&mut self) {
         let opcode = self.next_byte();
-        let instruction = ((opcode & 0b11100000) >> 3) + (opcode & 0b11);
-        let addressing = (opcode & 0b00011100) >> 2;
-
-        let addressing_mode = self.addressing_mode(instruction, addressing);
-        
-        match instruction {
-            1 => self.accumulator |= self.value_of(addressing_mode).unwrap(), // ORA
-            5 => self.accumulator &= self.value_of(addressing_mode).unwrap(), // AND
-            9 => self.accumulator ^= self.value_of(addressing_mode).unwrap(), // EOR
-            13 => {                                                           // ADC
-                let (result, overflow) = self.accumulator.overflowing_add(self.value_of(addressing_mode).unwrap());
-                let (result, overflow2) = result.overflowing_add(self.status.get(StatusBit::Carry) as u8);
-                self.accumulator = result;
-                self.status.set(StatusBit::Carry, overflow || overflow2)
-            }
-            _ => {}
-        }
+        let addressing_mode = self.addressing_mode(opcode);
     }
 
     fn next_byte(&mut self) -> u8 {
@@ -68,35 +52,74 @@ impl CPU {
         self.memory.read(self.program_counter - 1)
     }
 
-    fn addressing_mode(&mut self, instruction: u8, addressing: u8) -> AddressingMode{
-        if instruction & 1 == 0 {
-            match addressing {
-                0 => {
-                    let index = self.x.wrapping_add(self.next_byte());
-                    let address = self.memory.read_double(index as u16);
-                    AddressingMode::Indirect(address)
+    fn addressing_mode(&mut self, opcode: u8) -> AddressingMode{
+        let a = opcode & 0b11100000 >> 5;
+        let b = opcode & 0b11100 >> 2;
+        let c = opcode & 0b11;
+
+        match b {
+            0 => { 
+                if c & 1 == 0 {
+                    if a & 0b100 == 0{
+                        if a == 1 {
+                            AddressingMode::Indirect(u16::from(self.next_byte()) + u16::from(self.next_byte()) << 8)
+                        } else {
+                            AddressingMode::Implied
+                        }
+                    } else {
+                        AddressingMode::Immediate(self.next_byte())
+                    }
+                } else {
+                    let address = u16::from(self.next_byte()).wrapping_add(self.x as u16);
+                    AddressingMode::Indirect(self.memory.read_double(address))
                 }
-                1 => AddressingMode::Indirect(self.next_byte() as u16),
-                2 => AddressingMode::Immediate(self.next_byte()),
-                3 => AddressingMode::Indirect(u16::from_le_bytes([self.next_byte(), self.next_byte()])),
-                4 => {
-                    let next = self.next_byte();
-                    let address = self.memory.read_double(next as u16);
-                    AddressingMode::Indirect( address + self.y as u16)
-                },
-                5 => AddressingMode::Indirect(self.next_byte().wrapping_add(self.x) as u16),
-                6 => AddressingMode::Indirect(u16::from_le_bytes([self.next_byte(), self.next_byte()]) + self.y as u16),
-                7 => AddressingMode::Indirect(u16::from_le_bytes([self.next_byte(), self.next_byte()]) + self.x as u16),
-                _ => { unreachable!() }
             }
-        } else {
-            todo!()
+            1 => AddressingMode::Indirect(self.next_byte() as u16),
+            2 => { 
+                if c & 1 == 0 {
+                    if (c & 0b10 != 0) && (a & 0b10 != 0) {
+                        AddressingMode::Accumulator
+                    } else {
+                        AddressingMode::Implied
+                    }
+                } else {
+                    AddressingMode::Immediate(self.next_byte())
+                }
+            }
+            3 => AddressingMode::Indirect(u16::from(self.next_byte()) + u16::from(self.next_byte()) << 8),
+            4 => if c & 1 == 0 {
+                    let offset = self.next_byte() as i16;
+                    if offset >= 0 {
+                        AddressingMode::Indirect(self.program_counter + offset as u16)
+                    } else {
+                        AddressingMode::Indirect(self.program_counter - offset.unsigned_abs())
+                    }
+                } else {
+                    let zero_page_address = self.next_byte();
+                    let full_address = self.memory.read_double(zero_page_address as u16);
+                    let value_at_full_address = self.memory.read_double(full_address);
+                    AddressingMode::Indirect(value_at_full_address + self.y as u16)
+                }
+            5 => { 
+                if (a == 4 || a == 5) && (c & 0b10 != 0) {
+                    AddressingMode::Indirect(self.next_byte().wrapping_add(self.y) as u16)
+                } else {
+                    AddressingMode::Indirect(self.next_byte().wrapping_add(self.x) as u16)
+                }
+            }
+            6 => if c & 1 == 0 {
+                    AddressingMode::Implied
+                } else {
+                    AddressingMode::Indirect((self.y as u16).wrapping_add(self.next_byte() as u16).wrapping_add(u16::from(self.next_byte()) << 8))
+                }
+            7 => AddressingMode::Indirect((self.x as u16).wrapping_add(self.next_byte() as u16).wrapping_add(u16::from(self.next_byte()) << 8)),
+            _ => unreachable!()
         }
     }
 
     fn value_of(&self, addressing_mode: AddressingMode) -> Option<u8> {
         match addressing_mode {
-            AddressingMode::None => None,
+            AddressingMode::Implied => None,
             AddressingMode::Accumulator => Some(self.accumulator),
             AddressingMode::Immediate(value) => Some(value),
             AddressingMode::Indirect(value) => Some(self.memory.read(value))
@@ -156,7 +179,7 @@ impl Memory {
     }
 
     fn read_double(&self, address: u16) -> u16 {
-        u16::from_le_bytes([self.read(address), self.read(address + 1)])
+        (self.read(address + 1) as u16) << 8 + self.read(address) as u16
     }
 
     fn write(&mut self, address: u16, value: u8) {
