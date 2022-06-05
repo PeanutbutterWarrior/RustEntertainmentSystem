@@ -48,25 +48,25 @@ impl CPU {
         
         if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
             self.accumulator |= self.value_of(operand).unwrap();
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
 
         } else if opcode & 0b111_000_11 == 0b001_000_01 { // AND
             self.accumulator &= self.value_of(operand).unwrap();
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
         
         } else if opcode & 0b111_000_11 == 0b010_000_01 { // EOR
             self.accumulator ^= self.value_of(operand).unwrap();
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
 
         } else if opcode & 0b111_000_11 == 0b011_000_01 { // ADC
             let value = self.value_of(operand).unwrap();
             let (mut result, mut carry) = self.accumulator.overflowing_add(value);
             let mut overflow = (self.accumulator ^ result) & (value ^ result) & 0x80 != 0; // From http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
             
-            if self.status.get(StatusBit::Carry) {
+            if self.status.get_flag(StatusBit::Carry) {
                 result = result.wrapping_add(1);
                 if result == 0 {
                     carry = true;
@@ -76,10 +76,10 @@ impl CPU {
                 }
             }
             self.accumulator = result;
-            self.status.set(StatusBit::Carry, carry);
-            self.status.set(StatusBit::Overflow, overflow);
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Carry, carry);
+            self.status.set_flag(StatusBit::Overflow, overflow);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
         
         } else if opcode & 0b111_000_11 == 0b100_000_01 { // STA
             if let AddressingMode::Indirect(addr) = operand {
@@ -88,21 +88,21 @@ impl CPU {
 
         } else if opcode & 0b111_000_11 == 0b101_000_01 { // LDA
             self.accumulator = self.value_of(operand).unwrap();
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
         
         } else if opcode & 0b111_000_11 == 0b110_000_01 { // CMP
             let (result, carry) = self.value_of(operand).unwrap().overflowing_sub(self.accumulator);
-            self.status.set(StatusBit::Carry, carry);
-            self.status.set(StatusBit::Negative, result > 127);
-            self.status.set(StatusBit::Zero, result == 0);
+            self.status.set_flag(StatusBit::Carry, carry);
+            self.status.set_flag(StatusBit::Negative, result > 127);
+            self.status.set_flag(StatusBit::Zero, result == 0);
             self.accumulator = result
         } else if opcode & 0b111_000_11 == 0b111_000_01 { //SBC
             let value = !self.value_of(operand).unwrap();
             let (mut result, mut carry) = self.accumulator.overflowing_add(value);
             let mut overflow = (self.accumulator ^ result) & (value ^ result) & 0x80 != 0; // From http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
             
-            if self.status.get(StatusBit::Carry) {
+            if self.status.get_flag(StatusBit::Carry) {
                 result = result.wrapping_add(1);
                 if result == 0 {
                     carry = true;
@@ -112,10 +112,10 @@ impl CPU {
                 }
             }
             self.accumulator = result;
-            self.status.set(StatusBit::Carry, carry);
-            self.status.set(StatusBit::Overflow, overflow);
-            self.status.set(StatusBit::Negative, self.accumulator > 127);
-            self.status.set(StatusBit::Zero, self.accumulator == 0);
+            self.status.set_flag(StatusBit::Carry, carry);
+            self.status.set_flag(StatusBit::Overflow, overflow);
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
         }
     
     }

@@ -18,11 +18,11 @@ impl StatusRegister {
         StatusRegister { status: 0 }
     }
 
-    pub fn set(&mut self, bit: StatusBit, value: bool) {
+    pub fn set_flag(&mut self, bit: StatusBit, value: bool) {
         self.status |= (value as u8) << (bit as u8);
     }
 
-    pub fn get(&self, bit: StatusBit) -> bool {
+    pub fn get_flag(&self, bit: StatusBit) -> bool {
         self.status & (1 << (bit as u8)) > 0
     }
 }
