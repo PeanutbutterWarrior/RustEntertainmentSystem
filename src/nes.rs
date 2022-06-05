@@ -44,7 +44,80 @@ impl CPU {
 
     pub fn execute_next_instruction(&mut self) {
         let opcode = self.next_byte();
-        let addressing_mode = self.addressing_mode(opcode);
+        let operand = self.get_addressing_mode(opcode);
+        
+        if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
+            self.accumulator |= self.value_of(operand).unwrap();
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+
+        } else if opcode & 0b111_000_11 == 0b001_000_01 { // AND
+            self.accumulator &= self.value_of(operand).unwrap();
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+        
+        } else if opcode & 0b111_000_11 == 0b010_000_01 { // EOR
+            self.accumulator ^= self.value_of(operand).unwrap();
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+
+        } else if opcode & 0b111_000_11 == 0b011_000_01 { // ADC
+            let value = self.value_of(operand).unwrap();
+            let (mut result, mut carry) = self.accumulator.overflowing_add(value);
+            let mut overflow = (self.accumulator ^ result) & (value ^ result) & 0x80 != 0; // From http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            
+            if self.status.get(StatusBit::Carry) {
+                result = result.wrapping_add(1);
+                if result == 0 {
+                    carry = true;
+                    overflow = true;
+                } else if result == 128 {
+                    overflow = true;
+                }
+            }
+            self.accumulator = result;
+            self.status.set(StatusBit::Carry, carry);
+            self.status.set(StatusBit::Overflow, overflow);
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+        
+        } else if opcode & 0b111_000_11 == 0b100_000_01 { // STA
+            if let AddressingMode::Indirect(addr) = operand {
+                self.memory.write(addr, self.accumulator)
+            }
+
+        } else if opcode & 0b111_000_11 == 0b101_000_01 { // LDA
+            self.accumulator = self.value_of(operand).unwrap();
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+        
+        } else if opcode & 0b111_000_11 == 0b110_000_01 { // CMP
+            let (result, carry) = self.value_of(operand).unwrap().overflowing_sub(self.accumulator);
+            self.status.set(StatusBit::Carry, carry);
+            self.status.set(StatusBit::Negative, result > 127);
+            self.status.set(StatusBit::Zero, result == 0);
+            self.accumulator = result
+        } else if opcode & 0b111_000_11 == 0b111_000_01 { //SBC
+            let value = !self.value_of(operand).unwrap();
+            let (mut result, mut carry) = self.accumulator.overflowing_add(value);
+            let mut overflow = (self.accumulator ^ result) & (value ^ result) & 0x80 != 0; // From http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            
+            if self.status.get(StatusBit::Carry) {
+                result = result.wrapping_add(1);
+                if result == 0 {
+                    carry = true;
+                    overflow = true;
+                } else if result == 128 {
+                    overflow = true;
+                }
+            }
+            self.accumulator = result;
+            self.status.set(StatusBit::Carry, carry);
+            self.status.set(StatusBit::Overflow, overflow);
+            self.status.set(StatusBit::Negative, self.accumulator > 127);
+            self.status.set(StatusBit::Zero, self.accumulator == 0);
+        }
+    
     }
 
     fn next_byte(&mut self) -> u8 {
@@ -52,7 +125,7 @@ impl CPU {
         self.memory.read(self.program_counter - 1)
     }
 
-    fn addressing_mode(&mut self, opcode: u8) -> AddressingMode{
+    fn get_addressing_mode(&mut self, opcode: u8) -> AddressingMode{
         let a = opcode & 0b11100000 >> 5;
         let b = opcode & 0b11100 >> 2;
         let c = opcode & 0b11;
