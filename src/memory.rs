@@ -59,7 +59,7 @@ impl Memory {
     }
 
     pub fn read_double(&self, address: u16) -> u16 {
-        (self.read(address + 1) as u16) << 8 + self.read(address) as u16
+        ((self.read(address + 1) as u16) << 8) + self.read(address) as u16
     }
 
     pub fn write(&mut self, address: u16, value: u8) {

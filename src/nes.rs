@@ -9,6 +9,25 @@ enum AddressingMode {
     Indirect(u16),
 }
 
+#[derive(PartialEq, Eq)]
+enum Interrupt {
+    Reset,
+    NonMaskableInterrupt,
+    InterruptRequest,
+}
+
+impl Interrupt {
+    fn higher_priority(a: Self, b: Self) -> Self {
+        if a == Interrupt::Reset {
+            a
+        } else if a == Interrupt:: InterruptRequest || b == Interrupt::Reset {
+            b
+        } else {
+            a
+        }
+    }
+}
+
 pub struct CPU {
     program_counter: u16,
     stack_pointer: u8,
@@ -16,21 +35,21 @@ pub struct CPU {
     x: u8,
     y: u8,
     status: processor_status::StatusRegister,
-
-    memory: memory::Memory
+    memory: memory::Memory,
+    interrupt: Option<Interrupt>,
 }
 
 impl CPU {
     pub fn new() -> Self {
         CPU {
             program_counter: 0,
-            stack_pointer: 0,
+            stack_pointer: u8::MAX,
             accumulator: 0,
             x: 0,
             y: 0,
             status: processor_status::StatusRegister::new(),
-
-            memory: memory::Memory::from_cartridge("roms/nestest.nes") // TODO make better
+            memory: memory::Memory::from_cartridge("roms/nestest.nes"), // TODO make better
+            interrupt: Some(Interrupt::Reset),
         }
     }
 
@@ -38,7 +57,16 @@ impl CPU {
         let opcode = self.next_byte();
         let operand = self.get_addressing_mode(opcode);
         
-        if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
+        if false{
+
+        } else if opcode == 0x08 { // PHP
+            self.push_stack(u8::from(&self.status) | 0b00110000);
+        } else if opcode == 0x18 { // CLC
+            self.status.set_flag(StatusBit::Carry, false)
+
+        } else if opcode == 0x48 { // PHA
+            self.push_stack(self.accumulator);
+        } else if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
             self.accumulator |= self.value_of(operand).unwrap();
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
             self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
@@ -89,7 +117,7 @@ impl CPU {
             self.status.set_flag(StatusBit::Negative, result > 127);
             self.status.set_flag(StatusBit::Zero, result == 0);
             self.accumulator = result
-        } else if opcode & 0b111_000_11 == 0b111_000_01 { //SBC
+        } else if opcode & 0b111_000_11 == 0b111_000_01 { // SBC
             let value = !self.value_of(operand).unwrap();
             let (mut result, mut carry) = self.accumulator.overflowing_add(value);
             let mut overflow = (self.accumulator ^ result) & (value ^ result) & 0x80 != 0; // From http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
@@ -110,6 +138,25 @@ impl CPU {
             self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
         }
     
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            if let Some(interrupt) = &self.interrupt {
+                let jump_vector = match interrupt {
+                    Interrupt::Reset => 0xFFFA,
+                    Interrupt::InterruptRequest => 0xFFFC,
+                    Interrupt::NonMaskableInterrupt => 0xFFFE,
+                };
+                let [hi, low] = self.program_counter.to_be_bytes();
+                self.push_stack(hi);
+                self.push_stack(low);
+                self.push_stack(u8::from(&self.status));
+                self.program_counter = self.memory.read_double(jump_vector);
+                
+            }
+            self.execute_next_instruction();
+        }
     }
 
     fn next_byte(&mut self) -> u8 {
@@ -189,6 +236,20 @@ impl CPU {
             AddressingMode::Immediate(value) => Some(value),
             AddressingMode::Indirect(value) => Some(self.memory.read(value))
         }
+    }
+
+    fn halt(&self) {
+        panic!("Halted")
+    }
+
+    fn push_stack(&mut self, value: u8) {
+        self.memory.write(0x100 + self.stack_pointer as u16, value);
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+    }
+
+    fn pop_stack(&mut self) -> u8 {
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
+        self.memory.read(0x100 + self.stack_pointer as u16)
     }
 
 }
