@@ -8,6 +8,7 @@ pub struct Memory {
 }
 
 impl Memory {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Memory {
             upper_rom: Box::new([0; 0x4000]),
