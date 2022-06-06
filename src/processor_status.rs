@@ -2,7 +2,7 @@
 pub enum StatusBit {
     Carry = 0,
     Zero = 1,
-    InterruptDisabel = 2,
+    InterruptDisable = 2,
     DecimalMode = 3,
     Break = 4,
     Overflow = 6,
@@ -15,7 +15,7 @@ pub struct StatusRegister {
 
 impl StatusRegister {
     pub fn new() -> Self {
-        StatusRegister { status: 0 }
+        StatusRegister { status: 0b00100000}
     }
 
     pub fn set_flag(&mut self, bit: StatusBit, value: bool) {
@@ -24,6 +24,10 @@ impl StatusRegister {
 
     pub fn get_flag(&self, bit: StatusBit) -> bool {
         self.status & (1 << (bit as u8)) > 0
+    }
+    
+    pub fn load(&mut self, value: u8) {
+        self.status = value | 0b00100000
     }
 }
 
