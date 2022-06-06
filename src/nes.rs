@@ -2,6 +2,7 @@ use crate::processor_status;
 use crate::processor_status::StatusBit;
 use crate::memory;
 
+#[derive(Clone, Copy)]
 enum AddressingMode {
     Implied,
     Accumulator,
@@ -225,8 +226,59 @@ impl CPU {
             self.status.set_flag(StatusBit::Overflow, overflow);
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
             self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
+        } else if opcode & 0b111_000_11 == 0b000_000_10 { // ASL
+            if opcode == 0x02 || opcode == 0x12 {
+                self.halt();
+            } else if opcode != 0x1A {
+                let value = self.value_of(operand).unwrap();
+                let carry = value & 0x80 != 0;
+                let result = value << 1;
+                self.write_to_addressing_mode(operand, result);
+                self.status.set_flag(StatusBit::Carry, carry);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        
+        } else if opcode & 0b111_000_11 == 0b001_000_10 { // ROL
+            if opcode == 0x22 || opcode == 0x32 {
+                self.halt();
+            } else if opcode != 0x3A {
+                let value = self.value_of(operand).unwrap();
+                let carry = value & 0x80 != 0;
+                let result = (value << 1) | self.status.get_flag(StatusBit::Carry) as u8;
+                self.write_to_addressing_mode(operand, result);
+                self.status.set_flag(StatusBit::Carry, carry);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        
+        } else if opcode & 0b111_000_11 == 0b010_000_10 { // LSR
+            if opcode == 0x42 || opcode == 0x52 {
+                self.halt();
+            } else if opcode != 0x5A {
+                let value = self.value_of(operand).unwrap();
+                let carry = value & 0x01 != 0;
+                let result = (value >> 1);
+                self.write_to_addressing_mode(operand, result);
+                self.status.set_flag(StatusBit::Carry, carry);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        } else if opcode & 0b111_000_11 == 0b011_000_10 { // ROR
+            if opcode == 0x62 || opcode == 0x72 {
+                self.halt();
+            } else if opcode != 0x7A {
+                let value = self.value_of(operand).unwrap();
+                let carry = value & 0x01 != 0;
+                let result = (value >> 1) | ((self.status.get_flag(StatusBit::Carry) as u8) << 7);
+                self.write_to_addressing_mode(operand, result);
+                self.status.set_flag(StatusBit::Carry, carry);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        
         }
-    
+        
     }
 
     pub fn run(&mut self) {
@@ -324,6 +376,14 @@ impl CPU {
             AddressingMode::Accumulator => Some(self.accumulator),
             AddressingMode::Immediate(value) => Some(value),
             AddressingMode::Indirect(value) => Some(self.memory.read(value))
+        }
+    }
+
+    fn write_to_addressing_mode(&mut self, addressing_mode: AddressingMode, value: u8) {
+        match addressing_mode {
+            AddressingMode::Accumulator => self.accumulator = value,
+            AddressingMode::Indirect(address) => self.memory.write(address, value),
+            _ => panic!("Tried writing to bad adressing mode"),
         }
     }
 
