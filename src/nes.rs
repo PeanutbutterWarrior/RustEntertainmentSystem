@@ -70,6 +70,13 @@ impl CPU {
         } else if opcode == 0x08 { // PHP
             self.push_stack(u8::from(&self.status) | 0b00110000);
 
+        } else if opcode == 0x10 { // BPL
+            if !self.status.get_flag(StatusBit::Negative) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0x18 { // CLC
             self.status.set_flag(StatusBit::Carry, false)
 
@@ -77,6 +84,13 @@ impl CPU {
             let status = self.pop_stack();
             self.status.load(status);
 
+        } else if opcode == 0x30 { // BMI
+            if self.status.get_flag(StatusBit::Negative) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0x38 { // SEC
             self.status.set_flag(StatusBit::Carry, true);
 
@@ -87,6 +101,13 @@ impl CPU {
         
         } else if opcode == 0x48 { // PHA
             self.push_stack(self.accumulator);
+        } else if opcode == 0x50 { // BVC
+            if !self.status.get_flag(StatusBit::Overflow) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0x58 { // CLI
             self.status.set_flag(StatusBit::InterruptDisable, false);
         } else if opcode == 0x60 { // RTS
@@ -94,6 +115,13 @@ impl CPU {
 
         } else if opcode == 0x68 { // PLA
             self.accumulator = self.pop_stack();
+        } else if opcode == 0x70 { // BVS
+            if self.status.get_flag(StatusBit::Overflow) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0x78 { // SEI
             self.status.set_flag(StatusBit::InterruptDisable, true);
 
@@ -106,6 +134,13 @@ impl CPU {
             self.accumulator = self.x;
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
             self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
+        
+        } else if opcode == 0x90 { // BCC
+            if !self.status.get_flag(StatusBit::Carry) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
         
         } else if opcode == 0x98 { // TYA
             self.accumulator = self.y;
@@ -125,6 +160,13 @@ impl CPU {
             self.status.set_flag(StatusBit::Negative, self.x > 127);
             self.status.set_flag(StatusBit::Zero, self.x == 0);
 
+        } else if opcode == 0xB0 { // BCS
+            if self.status.get_flag(StatusBit::Carry) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0xB8 { // CLV
             self.status.set_flag(StatusBit::Overflow, false);
 
@@ -143,6 +185,13 @@ impl CPU {
             self.status.set_flag(StatusBit::Negative, self.x > 127);
             self.status.set_flag(StatusBit::Zero, self.x == 0);
         
+        } else if opcode == 0xD0 { // BNE
+            if !self.status.get_flag(StatusBit::Zero) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0xD8 { // CLD
             self.status.set_flag(StatusBit::DecimalMode, false);
 
@@ -153,6 +202,13 @@ impl CPU {
 
         } else if opcode == 0xEA { // NOP
 
+        } else if opcode == 0xF0 { // BEQ
+            if self.status.get_flag(StatusBit::Zero) {
+                if let AddressingMode::Indirect(address) = operand {
+                    self.program_counter = address;
+                }
+            }
+        
         } else if opcode == 0xF8 { // SED
             self.status.set_flag(StatusBit::DecimalMode, true);
 
@@ -258,7 +314,7 @@ impl CPU {
             } else if opcode != 0x5A {
                 let value = self.value_of(operand).unwrap();
                 let carry = value & 0x01 != 0;
-                let result = (value >> 1);
+                let result = value >> 1;
                 self.write_to_addressing_mode(operand, result);
                 self.status.set_flag(StatusBit::Carry, carry);
                 self.status.set_flag(StatusBit::Negative, result > 127);
