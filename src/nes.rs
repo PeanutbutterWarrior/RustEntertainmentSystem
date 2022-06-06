@@ -79,10 +79,18 @@ impl CPU {
         } else if opcode == 0x38 { // SEC
             self.status.set_flag(StatusBit::Carry, true);
 
+        } else if opcode == 0x40 { // RTI
+            let status = self.pop_stack();
+            self.status.load(status);
+            self.program_counter = self.pop_stack() as u16 + ((self.pop_stack() as u16) << 8);
+        
         } else if opcode == 0x48 { // PHA
             self.push_stack(self.accumulator);
         } else if opcode == 0x58 { // CLI
             self.status.set_flag(StatusBit::InterruptDisable, false);
+        } else if opcode == 0x60 { // RTS
+            self.program_counter = self.pop_stack() as u16 + ((self.pop_stack() as u16) << 8);
+
         } else if opcode == 0x68 { // PLA
             self.accumulator = self.pop_stack();
         } else if opcode == 0x78 { // SEI
@@ -93,24 +101,47 @@ impl CPU {
             self.status.set_flag(StatusBit::Negative, self.y > 127);
             self.status.set_flag(StatusBit::Zero, self.y == 0);
 
+        } else if opcode == 0x8A { // TXA
+            self.accumulator = self.x;
+            self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
+            self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
+        
         } else if opcode == 0x98 { // TYA
             self.accumulator = self.y;
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
             self.status.set_flag(StatusBit::Zero, self.accumulator == 0);
+
+        } else if opcode == 0x9A { // TXS
+            self.stack_pointer = self.x;
 
         } else if opcode == 0xA8 { // TAY
             self.y = self.accumulator;
             self.status.set_flag(StatusBit::Negative, self.y > 127);
             self.status.set_flag(StatusBit::Zero, self.y == 0);
 
+        } else if opcode == 0xAA { // TAX
+            self.x = self.accumulator;
+            self.status.set_flag(StatusBit::Negative, self.x > 127);
+            self.status.set_flag(StatusBit::Zero, self.x == 0);
+
         } else if opcode == 0xB8 { // CLV
             self.status.set_flag(StatusBit::Overflow, false);
+
+        } else if opcode == 0xBA { // TSX
+            self.x = self.stack_pointer;
+            self.status.set_flag(StatusBit::Negative, self.x > 127);
+            self.status.set_flag(StatusBit::Zero, self.x == 0);
 
         } else if opcode == 0xC8 { // INY
             self.y = self.y.wrapping_add(1);
             self.status.set_flag(StatusBit::Negative, self.y > 127);
             self.status.set_flag(StatusBit::Zero, self.y == 0);
 
+        } else if opcode == 0xCA { // DEX
+            self.x = self.x.wrapping_sub(1);
+            self.status.set_flag(StatusBit::Negative, self.x > 127);
+            self.status.set_flag(StatusBit::Zero, self.x == 0);
+        
         } else if opcode == 0xD8 { // CLD
             self.status.set_flag(StatusBit::DecimalMode, false);
 
@@ -119,9 +150,11 @@ impl CPU {
             self.status.set_flag(StatusBit::Negative, self.x > 127);
             self.status.set_flag(StatusBit::Zero, self.x == 0);
 
+        } else if opcode == 0xEA { // NOP
+
         } else if opcode == 0xF8 { // SED
             self.status.set_flag(StatusBit::DecimalMode, true);
-            
+
         } else if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
             self.accumulator |= self.value_of(operand).unwrap();
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
