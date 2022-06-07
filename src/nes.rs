@@ -333,8 +333,32 @@ impl CPU {
                 self.status.set_flag(StatusBit::Zero, result == 0);
             }
         
-        }
+        } else if opcode & 0b111_000_11 == 0b100_000_10 { // STX
+            if let AddressingMode::Indirect(address) = operand {
+                self.memory.write(address, self.x)
+            }
         
+        } else if opcode & 0b111_000_11 == 0b101_000_10 { // LDX
+            self.x = self.value_of(operand).unwrap();
+            self.status.set_flag(StatusBit::Negative, self.x > 127);
+            self.status.set_flag(StatusBit::Zero, self.x == 0);
+
+        } else if opcode & 0b111_000_11 == 0b110_000_10 { // DEC
+            if let AddressingMode::Indirect(address) = operand {
+                let result = self.memory.read(address).wrapping_sub(1);
+                self.memory.write(address, result);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        
+        } else if opcode & 0b111_000_11 == 0b111_000_10 { // INC
+            if let AddressingMode::Indirect(address) = operand {
+                let result = self.memory.read(address).wrapping_add(1);
+                self.memory.write(address, result);
+                self.status.set_flag(StatusBit::Negative, result > 127);
+                self.status.set_flag(StatusBit::Zero, result == 0);
+            }
+        }
     }
 
     pub fn run(&mut self) {
