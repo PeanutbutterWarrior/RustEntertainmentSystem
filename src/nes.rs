@@ -58,9 +58,7 @@ impl CPU {
         let opcode = self.next_byte();
         let operand = self.get_addressing_mode(opcode);
         
-        if false{
-
-        } else if opcode == 0x00 { // BRK
+        if opcode == 0x00 { // BRK
             match self.interrupt {
                 Some(current_interrupt) => self.interrupt = Some(Interrupt::higher_priority(current_interrupt, Interrupt::InterruptRequest)),
                 None => self.interrupt = Some(Interrupt::InterruptRequest),
@@ -80,6 +78,14 @@ impl CPU {
         } else if opcode == 0x18 { // CLC
             self.status.set_flag(StatusBit::Carry, false)
 
+        } else if opcode == 0x20 { // JSR
+            if let AddressingMode::Indirect(address) = operand {
+                let [lo, hi] = self.program_counter.to_le_bytes();
+                self.push_stack(hi);
+                self.push_stack(lo);
+                self.program_counter = address;
+            }
+        
         } else if opcode == 0x28 { // PLP
             let status = self.pop_stack();
             self.status.load(status);
@@ -212,6 +218,16 @@ impl CPU {
         } else if opcode == 0xF8 { // SED
             self.status.set_flag(StatusBit::DecimalMode, true);
 
+        } else if opcode == 0x4C || opcode == 0x6C { // JSR
+            if let AddressingMode::Indirect(address) = operand {
+                self.program_counter = address
+            }
+
+        } else if opcode == 0x24 || opcode == 0x2C { // BIT
+            let value = self.value_of(operand).unwrap();
+            self.status.set_flag(StatusBit::Negative, value & 0x80 > 0);
+            self.status.set_flag(StatusBit::Overflow, value & 0x40 > 0);
+            self.status.set_flag(StatusBit::Zero, value & self.accumulator > 0);
         } else if opcode & 0b111_000_11 == 0b000_000_01 { // ORA
             self.accumulator |= self.value_of(operand).unwrap();
             self.status.set_flag(StatusBit::Negative, self.accumulator > 127);
@@ -262,7 +278,6 @@ impl CPU {
             self.status.set_flag(StatusBit::Carry, carry);
             self.status.set_flag(StatusBit::Negative, result > 127);
             self.status.set_flag(StatusBit::Zero, result == 0);
-            self.accumulator = result
         } else if opcode & 0b111_000_11 == 0b111_000_01 { // SBC
             let value = !self.value_of(operand).unwrap();
             let (mut result, mut carry) = self.accumulator.overflowing_add(value);
@@ -335,7 +350,7 @@ impl CPU {
         
         } else if opcode & 0b111_000_11 == 0b100_000_10 { // STX
             if let AddressingMode::Indirect(address) = operand {
-                self.memory.write(address, self.x)
+                self.memory.write(address, self.x);
             }
         
         } else if opcode & 0b111_000_11 == 0b101_000_10 { // LDX
@@ -358,6 +373,25 @@ impl CPU {
                 self.status.set_flag(StatusBit::Negative, result > 127);
                 self.status.set_flag(StatusBit::Zero, result == 0);
             }
+        } else if opcode & 0b111_000_11 == 0b100_000_00 { // STY
+            if let AddressingMode::Indirect(address) = operand {
+                self.memory.write(address, self.y);
+            }
+
+        } else if opcode & 0b111_000_11 == 0b101_000_00 { // LDY
+            self.y = self.value_of(operand).unwrap();
+            self.status.set_flag(StatusBit::Negative, self.y > 127);
+            self.status.set_flag(StatusBit::Zero, self.y == 0);
+        } else if opcode & 0b111_000_11 == 0b110_000_00 { // CPY
+            let (result, carry) = self.value_of(operand).unwrap().overflowing_sub(self.y);
+            self.status.set_flag(StatusBit::Carry, carry);
+            self.status.set_flag(StatusBit::Negative, result > 127);
+            self.status.set_flag(StatusBit::Zero, result == 0);
+        } else if opcode & 0b111_000_11 == 0b111_000_00 { // CPX
+            let (result, carry) = self.value_of(operand).unwrap().overflowing_sub(self.x);
+            self.status.set_flag(StatusBit::Carry, carry);
+            self.status.set_flag(StatusBit::Negative, result > 127);
+            self.status.set_flag(StatusBit::Zero, result == 0);
         }
     }
 
@@ -419,7 +453,14 @@ impl CPU {
                     AddressingMode::Immediate(self.next_byte())
                 }
             }
-            3 => AddressingMode::Indirect(u16::from(self.next_byte()) + u16::from(self.next_byte()) << 8),
+            3 => {
+                let address = u16::from(self.next_byte()) + (u16::from(self.next_byte()) << 8);
+                if opcode == 0x6C {
+                    AddressingMode::Indirect(self.memory.read_double(address))
+                } else {
+                    AddressingMode::Indirect(address)
+                }
+            }
             4 => if c & 1 == 0 {
                     let offset = self.next_byte() as i16;
                     if offset >= 0 {
